@@ -1,7 +1,12 @@
 import { join } from 'node:path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import axios from 'axios'
+import CryptoJS from 'crypto-js'
+import dotenv from 'dotenv'
 import icon from '../../resources/icon.png?asset'
+
+dotenv.config()
 
 function createWindow(): void {
   // Create the browser window.
@@ -52,6 +57,38 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // 百度翻译API配置
+  const BAIDU_APP_ID = process.env.BAIDU_APP_ID || ''
+  const BAIDU_SECRET_KEY = process.env.BAIDU_SECRET_KEY || ''
+
+  // 百度翻译API处理
+  ipcMain.handle('translate', async (_event, text: string, from: string, to: string) => {
+    try {
+      const salt = Date.now().toString()
+      const sign = CryptoJS.MD5(BAIDU_APP_ID + text + salt + BAIDU_SECRET_KEY).toString()
+
+      const response = await axios.get('https://fanyi-api.baidu.com/api/trans/vip/translate', {
+        params: {
+          q: text,
+          from,
+          to,
+          appid: BAIDU_APP_ID,
+          salt,
+          sign
+        }
+      })
+
+      if (response.data.error_code) {
+        return { result: '', error: `翻译错误: ${response.data.error_msg}` }
+      }
+
+      const translatedText = response.data.trans_result?.map((item: any) => item.dst).join('\n') || ''
+      return { result: translatedText }
+    } catch (error: any) {
+      return { result: '', error: `请求失败: ${error.message}` }
+    }
+  })
 
   createWindow()
 

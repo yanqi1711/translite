@@ -1,9 +1,17 @@
 import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 export default defineConfig({
-  main: {},
+  main: {
+    define: {
+      'process.env.BAIDU_APP_ID': JSON.stringify(process.env.BAIDU_APP_ID || ''),
+      'process.env.BAIDU_SECRET_KEY': JSON.stringify(process.env.BAIDU_SECRET_KEY || '')
+    }
+  },
   preload: {},
   renderer: {
     resolve: {

@@ -22,12 +22,16 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0"
+    "@electron-toolkit/utils": "^4.0.0",
+    "axios": "^1.13.6",
+    "crypto-js": "^4.2.0",
+    "dotenv": "^17.3.1"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^7.4.3",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.19.1",
     "@vitejs/plugin-vue": "^6.0.2",
     "electron": "^39.2.6",
