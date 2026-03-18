@@ -4,7 +4,7 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      translate: (text: string, from: string, to: string) => Promise<{ result: string; error?: string }>
+      translate: (text: string, from: string, to: string) => Promise<{ result: string; error?: string }>,
     }
   }
 }

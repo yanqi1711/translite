@@ -19,10 +19,10 @@ const languageOptions = [
   { value: 'de', label: '德语' },
   { value: 'it', label: '意大利语' },
   { value: 'ru', label: '俄语' },
-  { value: 'pt', label: '葡萄牙语' }
+  { value: 'pt', label: '葡萄牙语' },
 ]
 
-const translateText = async () => {
+async function translateText() {
   if (!sourceText.value.trim()) {
     errorMessage.value = '请输入要翻译的文本'
     return
@@ -36,34 +36,38 @@ const translateText = async () => {
     const response = await window.api.translate(sourceText.value, sourceLang.value, targetLang.value)
     if (response.error) {
       errorMessage.value = response.error
-    } else {
+    }
+    else {
       translatedText.value = response.result
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     errorMessage.value = `翻译失败: ${error.message}`
-  } finally {
+  }
+  finally {
     isLoading.value = false
   }
 }
 
-const clearText = () => {
+function clearText() {
   sourceText.value = ''
   translatedText.value = ''
   errorMessage.value = ''
 }
 
-const copyResult = async () => {
+async function copyResult() {
   if (translatedText.value) {
     try {
       await navigator.clipboard.writeText(translatedText.value)
       alert('已复制到剪贴板')
-    } catch (error) {
+    }
+    catch {
       alert('复制失败')
     }
   }
 }
 
-const swapLanguages = () => {
+function swapLanguages() {
   const temp = sourceLang.value
   sourceLang.value = targetLang.value
   targetLang.value = temp
@@ -99,8 +103,10 @@ const swapLanguages = () => {
           class="text-input"
           placeholder="请输入要翻译的文本..."
           @input="errorMessage = ''"
-        ></textarea>
-        <div class="text-info">{{ sourceText.length }} 字符</div>
+        />
+        <div class="text-info">
+          {{ sourceText.length }} 字符
+        </div>
       </div>
 
       <div class="text-area-container">
@@ -109,9 +115,11 @@ const swapLanguages = () => {
           class="text-output"
           placeholder="翻译结果将显示在这里..."
           readonly
-        ></textarea>
+        />
         <div class="text-info">
-          <button v-if="translatedText" class="copy-btn" @click="copyResult">复制</button>
+          <button v-if="translatedText" class="copy-btn" @click="copyResult">
+            复制
+          </button>
         </div>
       </div>
     </div>
@@ -121,8 +129,10 @@ const swapLanguages = () => {
     </div>
 
     <div class="actions">
-      <button class="btn btn-secondary" @click="clearText">清空</button>
-      <button class="btn btn-primary" @click="translateText" :disabled="isLoading">
+      <button class="btn btn-secondary" @click="clearText">
+        清空
+      </button>
+      <button class="btn btn-primary" :disabled="isLoading" @click="translateText">
         {{ isLoading ? '翻译中...' : '翻译' }}
       </button>
     </div>

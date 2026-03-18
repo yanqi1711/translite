@@ -1,9 +1,10 @@
 import { electronAPI } from '@electron-toolkit/preload'
 import { contextBridge, ipcRenderer } from 'electron'
+import process from 'node:process'
 
 // Custom APIs for renderer
 const api = {
-  translate: (text: string, from: string, to: string) => ipcRenderer.invoke('translate', text, from, to)
+  translate: (text: string, from: string, to: string) => ipcRenderer.invoke('translate', text, from, to),
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
