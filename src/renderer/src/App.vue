@@ -159,6 +159,18 @@ async function pasteAndTranslate() {
   }
 }
 
+async function translateSelection(selectedText: string) {
+  if (!selectedText || !selectedText.trim()) {
+    await focusInput()
+    return
+  }
+
+  sourceText.value = selectedText.trim()
+  await nextTick()
+  adjustInputHeight()
+  await translateText()
+}
+
 watch(sourceText, () => {
   adjustInputHeight()
 })
@@ -170,6 +182,8 @@ watch([showResult, isResultExpanded], async () => {
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
+  window.api.onSelectionTranslate?.(translateSelection)
+  focusInput()
   adjustInputHeight()
   resizeWindowToContent()
 })
@@ -208,7 +222,7 @@ onMounted(() => {
       />
       <div class="input-info">
         <span class="char-count">{{ sourceText.length }} chars</span>
-        <span class="hint">Enter 翻译，Shift+Enter 换行</span>
+        <span class="hint">Enter 翻译，Shift+Enter 换行，Ctrl/Cmd+Shift+S 划词翻译</span>
       </div>
     </div>
 
