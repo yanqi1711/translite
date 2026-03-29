@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, globalShortcut, clipboard } from 'electron'
 import { Credentials, Translator } from '@translated/lara'
 import dotenv from 'dotenv'
 import icon from '../../resources/icon.png?asset'
@@ -29,6 +29,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+    mainWindow?.webContents.send('focus-input')
   })
 
   mainWindow.on('blur', () => {
@@ -50,16 +51,47 @@ function createWindow(): void {
   }
 }
 
-function toggleWindow() {
+function getSelectedOrClipboardText(): string {
+  const selectionText = clipboard.readText('selection').trim()
+  if (selectionText) {
+    return selectionText
+  }
+
+  return clipboard.readText().trim()
+}
+
+function showWindowWithFocus() {
   if (mainWindow) {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide()
+    if (process.platform === 'darwin') {
+      mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+      app.focus({ steal: true })
+      mainWindow.show()
+      mainWindow.focus()
+      mainWindow.webContents.send('focus-input')
+
+      setTimeout(() => {
+        mainWindow?.setVisibleOnAllWorkspaces(false)
+      }, 300)
     }
     else {
       mainWindow.show()
       mainWindow.focus()
+      mainWindow.webContents.send('focus-input')
     }
   }
+}
+
+function toggleWindow() {
+  if (!mainWindow) {
+    return
+  }
+
+  if (mainWindow.isVisible()) {
+    mainWindow.hide()
+    return
+  }
+
+  showWindowWithFocus()
 }
 
 function registerGlobalShortcuts() {
@@ -77,9 +109,16 @@ function registerGlobalShortcuts() {
   const pasteResult = globalShortcut.register(pasteAccelerator, () => {
     if (mainWindow) {
       if (!mainWindow.isVisible()) {
-        mainWindow.show()
+        showWindowWithFocus()
       }
-      mainWindow.webContents.send('paste-and-translate')
+
+      const selectedText = getSelectedOrClipboardText()
+      if (selectedText) {
+        mainWindow.webContents.send('translate-selected-text', selectedText)
+      }
+      else {
+        mainWindow.webContents.send('paste-and-translate')
+      }
     }
   })
 

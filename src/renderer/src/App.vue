@@ -147,16 +147,23 @@ async function focusInput() {
 async function pasteAndTranslate() {
   try {
     const text = await navigator.clipboard.readText()
-    if (text && text.trim()) {
-      sourceText.value = text
-      await nextTick()
-      adjustInputHeight()
-      translateText()
-    }
+    await translateSelectedText(text)
   }
   catch {
     console.error('Failed to read clipboard')
   }
+}
+
+async function translateSelectedText(text: string) {
+  if (!text || !text.trim()) {
+    return
+  }
+
+  sourceText.value = text.trim()
+  await nextTick()
+  adjustInputHeight()
+  await focusInput()
+  await translateText()
 }
 
 watch(sourceText, () => {
@@ -170,8 +177,10 @@ watch([showResult, isResultExpanded], async () => {
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
+  window.api.onTranslateSelectedText?.(translateSelectedText)
   adjustInputHeight()
   resizeWindowToContent()
+  focusInput()
 })
 </script>
 
