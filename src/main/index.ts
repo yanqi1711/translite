@@ -101,14 +101,18 @@ app.whenReady().then(() => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
-  ipcMain.on('resize-window', () => {
+  ipcMain.on('resize-window', (_event, requestedHeight?: number) => {
     const focusedWindow = BrowserWindow.getFocusedWindow()
-    if (focusedWindow) {
-      const [width] = focusedWindow.getSize()
-      const contentSize = focusedWindow.getContentSize()
-      const newHeight = Math.max(500, contentSize[1] + 80)
-      focusedWindow.setSize(width, newHeight)
-    }
+    if (!focusedWindow) return
+
+    const [contentWidth] = focusedWindow.getContentSize()
+    const minHeight = 500
+    const maxHeight = 900
+    const safeHeight = Number.isFinite(requestedHeight)
+      ? Math.min(Math.max(Math.floor(requestedHeight as number), minHeight), maxHeight)
+      : minHeight
+
+    focusedWindow.setContentSize(contentWidth, safeHeight)
   })
 
   ipcMain.on('focus-input', () => {

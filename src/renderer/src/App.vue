@@ -8,8 +8,8 @@ const targetLang = ref('en')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const showResult = ref(false)
+const isResultCollapsed = ref(false)
 const typingTimer = ref<number | null>(null)
-const inputHeight = ref('60px')
 
 const languageOptions = [
   { value: 'auto', label: 'Auto Detect' },
@@ -31,7 +31,6 @@ function adjustInputHeight() {
     textarea.style.height = 'auto'
     const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 300)
     textarea.style.height = `${newHeight}px`
-    inputHeight.value = `${newHeight}px`
   }
 }
 
@@ -49,46 +48,74 @@ function handleInput() {
   }
 }
 
+function getTextToTranslate() {
+  const textarea = document.querySelector('.text-input') as HTMLTextAreaElement | null
+  if (!textarea)
+    return sourceText.value.trim()
+
+  const { selectionStart, selectionEnd } = textarea
+  if (selectionStart !== selectionEnd) {
+    return sourceText.value.slice(selectionStart, selectionEnd).trim()
+  }
+
+  return sourceText.value.trim()
+}
+
 function scheduleTranslation() {
   if (typingTimer.value) {
     clearTimeout(typingTimer.value)
   }
   typingTimer.value = window.setTimeout(() => {
-    if (sourceText.value.trim()) {
+    if (getTextToTranslate()) {
       translateText()
     }
-  }, 500)
+  }, 250)
+}
+
+function requestWindowResize() {
+  nextTick(() => {
+    const app = document.getElementById('app')
+    const desiredHeight = app ? app.scrollHeight + 24 : undefined
+    window.api.resizeWindow(desiredHeight)
+  })
 }
 
 async function translateText() {
-  if (!sourceText.value.trim()) {
+  const textToTranslate = getTextToTranslate()
+  if (!textToTranslate) {
     return
   }
 
   isLoading.value = true
   errorMessage.value = ''
-  translatedText.value = ''
-  showResult.value = false
+  showResult.value = true
+  isResultCollapsed.value = true
+
+  requestWindowResize()
 
   try {
-    const response = await window.api.translate(sourceText.value, sourceLang.value, targetLang.value)
+    const response = await window.api.translate(textToTranslate, sourceLang.value, targetLang.value)
     if (response.error) {
       errorMessage.value = response.error
-      showResult.value = false
+      translatedText.value = ''
+      showResult.value = true
+      isResultCollapsed.value = false
     }
     else {
       translatedText.value = response.result
       showResult.value = true
+      isResultCollapsed.value = false
     }
   }
   catch (error: any) {
     errorMessage.value = `Translation failed: ${error.message}`
-    showResult.value = false
+    translatedText.value = ''
+    showResult.value = true
+    isResultCollapsed.value = false
   }
   finally {
     isLoading.value = false
-    await nextTick()
-    window.api.resizeWindow()
+    requestWindowResize()
   }
 }
 
@@ -97,9 +124,10 @@ function clearText() {
   translatedText.value = ''
   errorMessage.value = ''
   showResult.value = false
-  inputHeight.value = '60px'
+  isResultCollapsed.value = false
   nextTick(() => {
-    window.api.resizeWindow()
+    adjustInputHeight()
+    requestWindowResize()
   })
 }
 
@@ -121,7 +149,10 @@ function swapLanguages() {
 }
 
 function toggleResult() {
-  showResult.value = !showResult.value
+  if (!showResult.value || isLoading.value)
+    return
+
+  isResultCollapsed.value = !isResultCollapsed.value
 }
 
 async function focusInput() {
@@ -149,17 +180,18 @@ async function pasteAndTranslate() {
 
 watch(sourceText, () => {
   adjustInputHeight()
+  requestWindowResize()
 })
 
-watch(showResult, async () => {
-  await nextTick()
-  window.api.resizeWindow()
+watch([showResult, isResultCollapsed, isLoading], () => {
+  requestWindowResize()
 })
 
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
   adjustInputHeight()
+  requestWindowResize()
 })
 
 onUnmounted(() => {
@@ -181,7 +213,7 @@ onUnmounted(() => {
           {{ lang.label }}
         </option>
       </select>
-      <button class="swap-btn" @click="swapLanguages" aria-label="Swap languages">
+      <button class="swap-btn" aria-label="Swap languages" @click="swapLanguages">
         ↔
       </button>
       <select v-model="targetLang" class="lang-select">
@@ -195,30 +227,34 @@ onUnmounted(() => {
       <textarea
         v-model="sourceText"
         class="text-input"
-        placeholder="Type something... (Enter to translate, Shift+Enter for new line)"
+        placeholder="输入内容后按 Enter 翻译（支持划词翻译）"
         @keydown="handleKeyDown"
         @input="handleInput"
       />
       <div class="input-info">
         <span class="char-count">{{ sourceText.length }} chars</span>
-        <span class="hint">Enter to translate</span>
+        <span class="hint">Enter 翻译（选中文本可单独翻译）</span>
       </div>
     </div>
 
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
-    </div>
-
-    <section :class="['result-section', { visible: showResult, collapsed: !showResult && !isLoading }]">
-      <header class="result-header" @click="toggleResult" v-if="showResult || translatedText">
+    <section v-if="showResult || isLoading || translatedText || errorMessage" class="result-section" :class="{ expanded: !isResultCollapsed }">
+      <header class="result-header" @click="toggleResult">
         <span class="result-title">Translation</span>
-        <span class="toggle-icon">{{ showResult ? '▼' : '▶' }}</span>
+        <span class="toggle-icon">{{ isResultCollapsed ? '▶' : '▼' }}</span>
       </header>
-      <div v-show="showResult" class="result-content">
-        <div v-if="isLoading" class="loading">Translating...</div>
+
+      <div v-if="isLoading" class="loading-row">
+        <span class="loading-dot" />
+        <span>获取翻译中...</span>
+      </div>
+
+      <div v-show="!isResultCollapsed && !isLoading" class="result-content">
+        <div v-if="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </div>
         <p v-else-if="translatedText" class="result-text">{{ translatedText }}</p>
         <div v-if="translatedText" class="result-actions">
-          <button class="copy-btn" @click="copyResult" aria-label="Copy translation">
+          <button class="copy-btn" aria-label="Copy translation" @click="copyResult">
             Copy
           </button>
         </div>
@@ -226,7 +262,7 @@ onUnmounted(() => {
     </section>
 
     <footer class="actions">
-      <button class="btn" @click="clearText" aria-label="Clear all">
+      <button class="btn" aria-label="Clear all" @click="clearText">
         Clear
       </button>
     </footer>
