@@ -5,7 +5,7 @@ declare global {
     electron: ElectronAPI
     api: {
       translate: (text: string, from: string, to: string) => Promise<{ result: string; error?: string }>,
-      resizeWindow: () => void,
+      resizeWindow: (height?: number) => void,
       onShowApp?: (callback: () => void) => void,
       onPasteAndTranslate?: (callback: () => Promise<void>) => void,
     }
