@@ -12,6 +12,9 @@ const api = {
   onPasteAndTranslate: (callback: () => Promise<void>) => {
     ipcRenderer.on('paste-and-translate', callback)
   },
+  onTranslateSelectedText: (callback: (text: string) => Promise<void>) => {
+    ipcRenderer.on('translate-selected-text', (_event, text: string) => callback(text))
+  },
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
