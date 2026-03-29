@@ -144,6 +144,24 @@ async function focusInput() {
   textareaRef.value?.focus()
 }
 
+async function selectionTranslate(selectionText: string) {
+  const text = selectionText.trim()
+  if (!text) {
+    await focusInput()
+    return
+  }
+
+  sourceText.value = text
+  translatedText.value = ''
+  errorMessage.value = ''
+  showResult.value = false
+  isResultExpanded.value = false
+
+  await nextTick()
+  adjustInputHeight()
+  await translateText()
+}
+
 async function pasteAndTranslate() {
   try {
     const text = await navigator.clipboard.readText()
@@ -170,8 +188,10 @@ watch([showResult, isResultExpanded], async () => {
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
+  window.api.onSelectionTranslate?.(selectionTranslate)
   adjustInputHeight()
   resizeWindowToContent()
+  focusInput()
 })
 </script>
 

@@ -8,6 +8,7 @@ declare global {
       resizeWindow: (height?: number) => void,
       onShowApp?: (callback: () => void) => void,
       onPasteAndTranslate?: (callback: () => Promise<void>) => void,
+      onSelectionTranslate?: (callback: (selectionText: string) => Promise<void>) => void,
     }
   }
 }

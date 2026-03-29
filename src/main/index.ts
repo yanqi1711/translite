@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, globalShortcut, clipboard } from 'electron'
 import { Credentials, Translator } from '@translated/lara'
 import dotenv from 'dotenv'
 import icon from '../../resources/icon.png?asset'
@@ -27,6 +27,13 @@ function createWindow(): void {
     },
   })
 
+  // Keep utility window available above fullscreen apps/spaces.
+  mainWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: process.platform === 'darwin',
+  })
+  mainWindow.setAlwaysOnTop(true, 'screen-saver')
+
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
   })
@@ -50,14 +57,34 @@ function createWindow(): void {
   }
 }
 
+function showWindow(options?: { triggerSelectionCapture?: boolean }) {
+  if (!mainWindow) {
+    return
+  }
+
+  if (!mainWindow.isVisible()) {
+    mainWindow.show()
+  }
+
+  mainWindow.focus()
+  mainWindow.webContents.send('focus-input')
+
+  if (options?.triggerSelectionCapture) {
+    const selectionText = process.platform === 'linux'
+      ? clipboard.readText('selection').trim()
+      : clipboard.readText().trim()
+
+    mainWindow.webContents.send('selection-translate', selectionText)
+  }
+}
+
 function toggleWindow() {
   if (mainWindow) {
     if (mainWindow.isVisible()) {
       mainWindow.hide()
     }
     else {
-      mainWindow.show()
-      mainWindow.focus()
+      showWindow({ triggerSelectionCapture: true })
     }
   }
 }
@@ -75,12 +102,12 @@ function registerGlobalShortcuts() {
 
   const pasteAccelerator = process.platform === 'darwin' ? 'Command+Shift+V' : 'Ctrl+Shift+V'
   const pasteResult = globalShortcut.register(pasteAccelerator, () => {
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) {
-        mainWindow.show()
-      }
-      mainWindow.webContents.send('paste-and-translate')
+    if (!mainWindow) {
+      return
     }
+
+    showWindow()
+    mainWindow.webContents.send('paste-and-translate')
   })
 
   if (!pasteResult) {
