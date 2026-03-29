@@ -142,6 +142,11 @@ function toggleResult() {
 async function focusInput() {
   await nextTick()
   textareaRef.value?.focus()
+  const textarea = textareaRef.value
+  if (textarea) {
+    const textLength = textarea.value.length
+    textarea.setSelectionRange(textLength, textLength)
+  }
 }
 
 async function pasteAndTranslate() {
@@ -159,6 +164,22 @@ async function pasteAndTranslate() {
   }
 }
 
+async function prefillAndTranslate(payload: { text: string; autoTranslate: boolean }) {
+  if (!payload.text) {
+    await focusInput()
+    return
+  }
+
+  sourceText.value = payload.text
+  await nextTick()
+  adjustInputHeight()
+  await focusInput()
+
+  if (payload.autoTranslate) {
+    await translateText()
+  }
+}
+
 watch(sourceText, () => {
   adjustInputHeight()
 })
@@ -170,8 +191,10 @@ watch([showResult, isResultExpanded], async () => {
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
+  window.api.onPrefillAndTranslate?.(prefillAndTranslate)
   adjustInputHeight()
   resizeWindowToContent()
+  focusInput()
 })
 </script>
 
