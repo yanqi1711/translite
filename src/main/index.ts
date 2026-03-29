@@ -1,18 +1,23 @@
 import { join } from 'node:path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import axios from 'axios'
-import CryptoJS from 'crypto-js'
+import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron'
+import { Credentials, Translator } from '@translated/lara'
 import dotenv from 'dotenv'
 import icon from '../../resources/icon.png?asset'
 
 dotenv.config()
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+  mainWindow = new BrowserWindow({
+    width: 800,
+    minHeight: 500,
+    height: 500,
+    resizable: true,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -23,7 +28,13 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+  })
+
+  mainWindow.on('blur', () => {
+    if (mainWindow && !mainWindow.isFocused()) {
+      mainWindow.hide()
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -31,8 +42,6 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   }
@@ -41,73 +50,129 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+function toggleWindow() {
+  if (mainWindow) {
+    if (mainWindow.isVisible()) {
+      mainWindow.hide()
+    }
+    else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }
+}
+
+function registerGlobalShortcuts() {
+  const accelerator = process.platform === 'darwin' ? 'Command+Shift+T' : 'Ctrl+Shift+T'
+
+  const result = globalShortcut.register(accelerator, () => {
+    toggleWindow()
+  })
+
+  if (!result) {
+    console.error('Global shortcut registration failed')
+  }
+
+  const pasteAccelerator = process.platform === 'darwin' ? 'Command+Shift+V' : 'Ctrl+Shift+V'
+  const pasteResult = globalShortcut.register(pasteAccelerator, () => {
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) {
+        mainWindow.show()
+      }
+      mainWindow.webContents.send('paste-and-translate')
+    }
+  })
+
+  if (!pasteResult) {
+    console.error('Paste shortcut registration failed')
+  }
+}
+
+function unregisterGlobalShortcuts() {
+  globalShortcut.unregisterAll()
+}
+
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  // 百度翻译API配置
-  const BAIDU_APP_ID = process.env.BAIDU_APP_ID || ''
-  const BAIDU_SECRET_KEY = process.env.BAIDU_SECRET_KEY || ''
+  ipcMain.on('resize-window', () => {
+    const focusedWindow = BrowserWindow.getFocusedWindow()
+    if (focusedWindow) {
+      const [width] = focusedWindow.getSize()
+      const contentSize = focusedWindow.getContentSize()
+      const newHeight = Math.max(500, contentSize[1] + 80)
+      focusedWindow.setSize(width, newHeight)
+    }
+  })
 
-  // 百度翻译API处理
+  ipcMain.on('focus-input', () => {
+    if (mainWindow) {
+      mainWindow.webContents.send('focus-input')
+    }
+  })
+
+  const LARA_ACCESS_KEY_ID = process.env.LARA_ACCESS_KEY_ID || ''
+  const LARA_ACCESS_KEY_SECRET = process.env.LARA_ACCESS_KEY_SECRET || ''
+
+  const credentials = new Credentials(LARA_ACCESS_KEY_ID, LARA_ACCESS_KEY_SECRET)
+  const lara = new Translator(credentials)
+
+  const languageCodeMap: Record<string, string> = {
+    auto: 'auto',
+    zh: 'zh-CN',
+    en: 'en-US',
+    jp: 'ja-JP',
+    kor: 'ko-KR',
+    fra: 'fr-FR',
+    spa: 'es-ES',
+    de: 'de-DE',
+    it: 'it-IT',
+    ru: 'ru-RU',
+    pt: 'pt-PT'
+  }
+
   ipcMain.handle('translate', async (_event, text: string, from: string, to: string) => {
     try {
-      const salt = Date.now().toString()
-      const sign = CryptoJS.MD5(BAIDU_APP_ID + text + salt + BAIDU_SECRET_KEY).toString()
+      let sourceLang = from === 'auto' ? 'auto' : (languageCodeMap[from] || from)
+      const targetLang = languageCodeMap[to] || to
 
-      const response = await axios.get('https://fanyi-api.baidu.com/api/trans/vip/translate', {
-        params: {
-          q: text,
-          from,
-          to,
-          appid: BAIDU_APP_ID,
-          salt,
-          sign
-        }
-      })
-
-      if (response.data.error_code) {
-        return { result: '', error: `翻译错误: ${response.data.error_msg}` }
+      if (sourceLang === 'auto') {
+        const detected = await lara.detect(text)
+        sourceLang = detected.language
       }
 
-      const translatedText = response.data.trans_result?.map((item: any) => item.dst).join('\n') || ''
-      return { result: translatedText }
+      const result = await lara.translate(text, sourceLang, targetLang, {
+        timeoutInMillis: 10000
+      })
+
+      return { result: result.translation }
     } catch (error: any) {
-      return { result: '', error: `请求失败: ${error.message}` }
+      return { result: '', error: `Translation failed: ${error.message}` }
     }
   })
 
   createWindow()
+  registerGlobalShortcuts()
 
   app.on('activate', () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0)
       createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  mainWindow = null
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
+app.on('will-quit', () => {
+  unregisterGlobalShortcuts()
+})

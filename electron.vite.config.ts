@@ -8,8 +8,8 @@ dotenv.config()
 export default defineConfig({
   main: {
     define: {
-      'process.env.BAIDU_APP_ID': JSON.stringify(process.env.BAIDU_APP_ID || ''),
-      'process.env.BAIDU_SECRET_KEY': JSON.stringify(process.env.BAIDU_SECRET_KEY || '')
+      'process.env.LARA_ACCESS_KEY_ID': JSON.stringify(process.env.LARA_ACCESS_KEY_ID || ''),
+      'process.env.LARA_ACCESS_KEY_SECRET': JSON.stringify(process.env.LARA_ACCESS_KEY_SECRET || '')
     }
   },
   preload: {},

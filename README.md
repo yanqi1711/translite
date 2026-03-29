@@ -1,6 +1,6 @@
-# 百度翻译 - Electron桌面应用
+# LARA翻译 - Electron桌面应用
 
-基于 Electron + Vue + TypeScript 开发的百度翻译桌面应用。
+基于 Electron + Vue + TypeScript 开发的LARA翻译桌面应用。
 
 ## 功能特性
 
@@ -9,6 +9,7 @@
 - 实时翻译
 - 一键复制翻译结果
 - 简洁美观的界面设计
+- 使用LARA AI翻译引擎，提供更准确的翻译结果
 
 ## 安装依赖
 
@@ -18,13 +19,13 @@ npm install
 
 ## 配置API密钥
 
-1. 访问 [百度翻译开放平台](https://fanyi-api.baidu.com/) 注册账号
-2. 创建应用获取 APP ID 和密钥
+1. 访问 [LARA开发者平台](https://developers.laratranslate.com/) 注册账号
+2. 创建应用获取 Access Key ID 和 Secret
 3. 在项目根目录创建 `.env` 文件，填入你的API密钥：
 
 ```env
-BAIDU_APP_ID=你的APP_ID
-BAIDU_SECRET_KEY=你的密钥
+LARA_ACCESS_KEY_ID=你的LARA_ACCESS_KEY_ID
+LARA_ACCESS_KEY_SECRET=你的LARA_ACCESS_KEY_SECRET
 ```
 
 参考 `.env.example` 文件。
@@ -60,10 +61,10 @@ npm run build:linux
 - Vue 3
 - TypeScript
 - Vite
-- Axios
-- CryptoJS
+- LARA Translation SDK (@translated/lara)
 
 ## 注意事项
 
 - 请妥善保管你的API密钥，不要将其提交到版本控制系统
-- 百度翻译API有调用频率限制，请注意合理使用
+- LARA API有调用频率限制，请注意合理使用
+- 免费账户有一定的翻译额度限制

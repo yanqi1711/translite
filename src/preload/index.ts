@@ -5,6 +5,13 @@ import process from 'node:process'
 // Custom APIs for renderer
 const api = {
   translate: (text: string, from: string, to: string) => ipcRenderer.invoke('translate', text, from, to),
+  resizeWindow: () => ipcRenderer.send('resize-window'),
+  onShowApp: (callback: () => void) => {
+    ipcRenderer.on('focus-input', callback)
+  },
+  onPasteAndTranslate: (callback: () => Promise<void>) => {
+    ipcRenderer.on('paste-and-translate', callback)
+  },
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
