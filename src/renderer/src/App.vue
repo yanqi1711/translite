@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 
 const sourceText = ref('')
 const translatedText = ref('')
@@ -8,8 +8,8 @@ const targetLang = ref('en')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const showResult = ref(false)
-const typingTimer = ref<number | null>(null)
-const inputHeight = ref('60px')
+const isResultExpanded = ref(false)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const languageOptions = [
   { value: 'auto', label: 'Auto Detect' },
@@ -26,69 +26,77 @@ const languageOptions = [
 ]
 
 function adjustInputHeight() {
-  const textarea = document.querySelector('.text-input') as HTMLTextAreaElement
-  if (textarea) {
-    textarea.style.height = 'auto'
-    const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 300)
-    textarea.style.height = `${newHeight}px`
-    inputHeight.value = `${newHeight}px`
+  const textarea = textareaRef.value
+  if (!textarea) {
+    return
   }
+
+  textarea.style.height = 'auto'
+  const newHeight = Math.min(Math.max(textarea.scrollHeight, 60), 240)
+  textarea.style.height = `${newHeight}px`
+}
+
+async function resizeWindowToContent() {
+  await nextTick()
+  const appElement = document.querySelector('.translator-container') as HTMLElement | null
+  const contentHeight = appElement ? Math.ceil(appElement.scrollHeight + 48) : 520
+  window.api.resizeWindow(contentHeight)
+}
+
+function getTextToTranslate() {
+  const textarea = textareaRef.value
+  if (!textarea) {
+    return sourceText.value.trim()
+  }
+
+  const selectedText = textarea.value.slice(textarea.selectionStart, textarea.selectionEnd).trim()
+  return selectedText || sourceText.value.trim()
 }
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    scheduleTranslation()
+    translateText()
   }
 }
 
 function handleInput() {
   adjustInputHeight()
-  if (typingTimer.value) {
-    clearTimeout(typingTimer.value)
-  }
-}
-
-function scheduleTranslation() {
-  if (typingTimer.value) {
-    clearTimeout(typingTimer.value)
-  }
-  typingTimer.value = window.setTimeout(() => {
-    if (sourceText.value.trim()) {
-      translateText()
-    }
-  }, 500)
 }
 
 async function translateText() {
-  if (!sourceText.value.trim()) {
+  const textToTranslate = getTextToTranslate()
+  if (!textToTranslate) {
     return
   }
 
+  showResult.value = true
+  isResultExpanded.value = false
   isLoading.value = true
   errorMessage.value = ''
   translatedText.value = ''
-  showResult.value = false
+  await resizeWindowToContent()
 
   try {
-    const response = await window.api.translate(sourceText.value, sourceLang.value, targetLang.value)
+    const response = await window.api.translate(textToTranslate, sourceLang.value, targetLang.value)
     if (response.error) {
       errorMessage.value = response.error
       showResult.value = false
+      isResultExpanded.value = false
+      return
     }
-    else {
-      translatedText.value = response.result
-      showResult.value = true
-    }
+
+    translatedText.value = response.result
+    isResultExpanded.value = true
   }
   catch (error: any) {
     errorMessage.value = `Translation failed: ${error.message}`
     showResult.value = false
+    isResultExpanded.value = false
   }
   finally {
     isLoading.value = false
-    await nextTick()
-    window.api.resizeWindow()
+    await resizeWindowToContent()
   }
 }
 
@@ -97,20 +105,23 @@ function clearText() {
   translatedText.value = ''
   errorMessage.value = ''
   showResult.value = false
-  inputHeight.value = '60px'
+  isResultExpanded.value = false
   nextTick(() => {
-    window.api.resizeWindow()
+    adjustInputHeight()
+    resizeWindowToContent()
   })
 }
 
 async function copyResult() {
-  if (translatedText.value) {
-    try {
-      await navigator.clipboard.writeText(translatedText.value)
-    }
-    catch {
-      console.error('Copy failed')
-    }
+  if (!translatedText.value) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(translatedText.value)
+  }
+  catch {
+    console.error('Copy failed')
   }
 }
 
@@ -121,15 +132,16 @@ function swapLanguages() {
 }
 
 function toggleResult() {
-  showResult.value = !showResult.value
+  if (!translatedText.value || isLoading.value) {
+    return
+  }
+  isResultExpanded.value = !isResultExpanded.value
+  resizeWindowToContent()
 }
 
 async function focusInput() {
   await nextTick()
-  const textarea = document.querySelector('.text-input') as HTMLTextAreaElement
-  if (textarea) {
-    textarea.focus()
-  }
+  textareaRef.value?.focus()
 }
 
 async function pasteAndTranslate() {
@@ -151,21 +163,15 @@ watch(sourceText, () => {
   adjustInputHeight()
 })
 
-watch(showResult, async () => {
-  await nextTick()
-  window.api.resizeWindow()
+watch([showResult, isResultExpanded], async () => {
+  await resizeWindowToContent()
 })
 
 onMounted(() => {
   window.api.onShowApp?.(focusInput)
   window.api.onPasteAndTranslate?.(pasteAndTranslate)
   adjustInputHeight()
-})
-
-onUnmounted(() => {
-  if (typingTimer.value) {
-    clearTimeout(typingTimer.value)
-  }
+  resizeWindowToContent()
 })
 </script>
 
@@ -181,7 +187,7 @@ onUnmounted(() => {
           {{ lang.label }}
         </option>
       </select>
-      <button class="swap-btn" @click="swapLanguages" aria-label="Swap languages">
+      <button class="swap-btn" aria-label="Swap languages" @click="swapLanguages">
         ↔
       </button>
       <select v-model="targetLang" class="lang-select">
@@ -193,15 +199,16 @@ onUnmounted(() => {
 
     <div class="input-section">
       <textarea
+        ref="textareaRef"
         v-model="sourceText"
         class="text-input"
-        placeholder="Type something... (Enter to translate, Shift+Enter for new line)"
+        placeholder="输入文本后按 Enter 翻译（支持划词翻译）"
         @keydown="handleKeyDown"
         @input="handleInput"
       />
       <div class="input-info">
         <span class="char-count">{{ sourceText.length }} chars</span>
-        <span class="hint">Enter to translate</span>
+        <span class="hint">Enter 翻译，Shift+Enter 换行</span>
       </div>
     </div>
 
@@ -209,16 +216,16 @@ onUnmounted(() => {
       {{ errorMessage }}
     </div>
 
-    <section :class="['result-section', { visible: showResult, collapsed: !showResult && !isLoading }]">
-      <header class="result-header" @click="toggleResult" v-if="showResult || translatedText">
+    <section :class="['result-section', { visible: showResult }]">
+      <header v-if="showResult || translatedText" class="result-header" @click="toggleResult">
         <span class="result-title">Translation</span>
-        <span class="toggle-icon">{{ showResult ? '▼' : '▶' }}</span>
+        <span class="toggle-icon">{{ isResultExpanded ? '▼' : '▶' }}</span>
       </header>
-      <div v-show="showResult" class="result-content">
+      <div v-show="isLoading || isResultExpanded" class="result-content">
         <div v-if="isLoading" class="loading">Translating...</div>
         <p v-else-if="translatedText" class="result-text">{{ translatedText }}</p>
         <div v-if="translatedText" class="result-actions">
-          <button class="copy-btn" @click="copyResult" aria-label="Copy translation">
+          <button class="copy-btn" aria-label="Copy translation" @click="copyResult">
             Copy
           </button>
         </div>
@@ -226,7 +233,7 @@ onUnmounted(() => {
     </section>
 
     <footer class="actions">
-      <button class="btn" @click="clearText" aria-label="Clear all">
+      <button class="btn" aria-label="Clear all" @click="clearText">
         Clear
       </button>
     </footer>
