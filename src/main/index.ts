@@ -1,9 +1,11 @@
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { app, BrowserWindow, ipcMain, shell, globalShortcut, clipboard } from 'electron'
 import { Credentials, Translator } from '@translated/lara'
+import axios from 'axios'
 import dotenv from 'dotenv'
 import icon from '../../resources/icon.png?asset'
 
@@ -169,13 +171,8 @@ app.whenReady().then(() => {
     }
   })
 
-  const LARA_ACCESS_KEY_ID = process.env.LARA_ACCESS_KEY_ID || ''
-  const LARA_ACCESS_KEY_SECRET = process.env.LARA_ACCESS_KEY_SECRET || ''
-
-  const credentials = new Credentials(LARA_ACCESS_KEY_ID, LARA_ACCESS_KEY_SECRET)
-  const lara = new Translator(credentials)
-
-  const languageCodeMap: Record<string, string> = {
+  const translationProvider = (process.env.TRANSLATION_PROVIDER || 'lara').toLowerCase()
+  const laraLanguageCodeMap: Record<string, string> = {
     auto: 'auto',
     zh: 'zh-CN',
     en: 'en-US',
@@ -186,13 +183,73 @@ app.whenReady().then(() => {
     de: 'de-DE',
     it: 'it-IT',
     ru: 'ru-RU',
-    pt: 'pt-PT'
+    pt: 'pt-PT',
   }
+
+  const baiduLanguageCodeMap: Record<string, string> = {
+    auto: 'auto',
+    zh: 'zh',
+    en: 'en',
+    jp: 'jp',
+    kor: 'kor',
+    fra: 'fra',
+    spa: 'spa',
+    de: 'de',
+    it: 'it',
+    ru: 'ru',
+    pt: 'pt',
+  }
+
+  const LARA_ACCESS_KEY_ID = process.env.LARA_ACCESS_KEY_ID || ''
+  const LARA_ACCESS_KEY_SECRET = process.env.LARA_ACCESS_KEY_SECRET || ''
+  const lara = translationProvider === 'lara'
+    ? new Translator(new Credentials(LARA_ACCESS_KEY_ID, LARA_ACCESS_KEY_SECRET))
+    : null
+
+  const BAIDU_APP_ID = process.env.BAIDU_APP_ID || ''
+  const BAIDU_SECRET_KEY = process.env.BAIDU_SECRET_KEY || ''
 
   ipcMain.handle('translate', async (_event, text: string, from: string, to: string) => {
     try {
-      let sourceLang = from === 'auto' ? 'auto' : (languageCodeMap[from] || from)
-      const targetLang = languageCodeMap[to] || to
+      if (translationProvider === 'baidu') {
+        if (!BAIDU_APP_ID || !BAIDU_SECRET_KEY) {
+          return { result: '', error: 'Baidu translation is not configured. Please set BAIDU_APP_ID and BAIDU_SECRET_KEY.' }
+        }
+
+        const sourceLang = baiduLanguageCodeMap[from] || from
+        const targetLang = baiduLanguageCodeMap[to] || to
+        const salt = `${Date.now()}`
+        const sign = createHash('md5').update(`${BAIDU_APP_ID}${text}${salt}${BAIDU_SECRET_KEY}`).digest('hex')
+
+        const response = await axios.get('https://fanyi-api.baidu.com/api/trans/vip/translate', {
+          params: {
+            q: text,
+            from: sourceLang,
+            to: targetLang,
+            appid: BAIDU_APP_ID,
+            salt,
+            sign,
+          },
+          timeout: 10000,
+        })
+
+        if (response.data.error_code) {
+          return { result: '', error: `Translation failed: [${response.data.error_code}] ${response.data.error_msg || 'Unknown error'}` }
+        }
+
+        const translated = Array.isArray(response.data.trans_result)
+          ? response.data.trans_result.map((item: { dst: string }) => item.dst).join('\n')
+          : ''
+
+        return { result: translated }
+      }
+
+      if (!lara) {
+        return { result: '', error: 'Lara translation is not configured. Please set TRANSLATION_PROVIDER=lara and valid Lara credentials.' }
+      }
+
+      let sourceLang = from === 'auto' ? 'auto' : (laraLanguageCodeMap[from] || from)
+      const targetLang = laraLanguageCodeMap[to] || to
 
       if (sourceLang === 'auto') {
         const detected = await lara.detect(text)
@@ -204,7 +261,8 @@ app.whenReady().then(() => {
       })
 
       return { result: result.translation }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       return { result: '', error: `Translation failed: ${error.message}` }
     }
   })
