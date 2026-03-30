@@ -1,6 +1,6 @@
 # LARA翻译 - Electron桌面应用
 
-基于 Electron + Vue + TypeScript 开发的LARA翻译桌面应用。
+基于 Electron + Vue + TypeScript 开发的桌面翻译应用，支持 LARA 和百度翻译 API。
 
 ## 功能特性
 
@@ -9,7 +9,7 @@
 - 实时翻译
 - 一键复制翻译结果
 - 简洁美观的界面设计
-- 使用LARA AI翻译引擎，提供更准确的翻译结果
+- 支持 LARA / 百度翻译双引擎，可通过环境变量切换
 
 ## 安装依赖
 
@@ -17,18 +17,27 @@
 npm install
 ```
 
-## 配置API密钥
+## 配置 API 密钥
 
-1. 访问 [LARA开发者平台](https://developers.laratranslate.com/) 注册账号
-2. 创建应用获取 Access Key ID 和 Secret
-3. 在项目根目录创建 `.env` 文件，填入你的API密钥：
+在项目根目录创建 `.env` 文件。你可以使用 LARA 或百度翻译（推荐至少配置一个）：
 
 ```env
-LARA_ACCESS_KEY_ID=你的LARA_ACCESS_KEY_ID
-LARA_ACCESS_KEY_SECRET=你的LARA_ACCESS_KEY_SECRET
+# 可选：强制指定翻译引擎（baidu 或 lara）
+# TRANSLATION_PROVIDER=baidu
+
+# LARA 配置
+LARA_ACCESS_KEY_ID=你的_LARA_ACCESS_KEY_ID
+LARA_ACCESS_KEY_SECRET=你的_LARA_ACCESS_KEY_SECRET
+
+# 百度翻译开放平台配置
+BAIDU_APP_ID=你的_BAIDU_APP_ID
+BAIDU_APP_SECRET=你的_BAIDU_APP_SECRET
 ```
 
-参考 `.env.example` 文件。
+说明：
+- 若设置 `TRANSLATION_PROVIDER=baidu`，将强制使用百度翻译。
+- 若未设置 `TRANSLATION_PROVIDER` 且配置了百度密钥，默认优先百度翻译。
+- 若百度不可用，则使用 LARA（前提是已配置 LARA 密钥）。
 
 ## 开发
 
@@ -62,9 +71,9 @@ npm run build:linux
 - TypeScript
 - Vite
 - LARA Translation SDK (@translated/lara)
+- 百度翻译开放平台 API
 
 ## 注意事项
 
-- 请妥善保管你的API密钥，不要将其提交到版本控制系统
-- LARA API有调用频率限制，请注意合理使用
-- 免费账户有一定的翻译额度限制
+- 请妥善保管密钥，不要提交到版本控制系统
+- 不同翻译平台均有调用频率和配额限制，请合理使用

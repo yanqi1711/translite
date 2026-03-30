@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -171,11 +172,18 @@ app.whenReady().then(() => {
 
   const LARA_ACCESS_KEY_ID = process.env.LARA_ACCESS_KEY_ID || ''
   const LARA_ACCESS_KEY_SECRET = process.env.LARA_ACCESS_KEY_SECRET || ''
+  const BAIDU_APP_ID = process.env.BAIDU_APP_ID || ''
+  const BAIDU_APP_SECRET = process.env.BAIDU_APP_SECRET || ''
+  const providerFromEnv = (process.env.TRANSLATION_PROVIDER || '').toLowerCase()
+  const hasBaiduCredentials = Boolean(BAIDU_APP_ID && BAIDU_APP_SECRET)
+  const hasLaraCredentials = Boolean(LARA_ACCESS_KEY_ID && LARA_ACCESS_KEY_SECRET)
+  const useBaiduProvider = providerFromEnv === 'baidu' || (providerFromEnv !== 'lara' && hasBaiduCredentials)
 
-  const credentials = new Credentials(LARA_ACCESS_KEY_ID, LARA_ACCESS_KEY_SECRET)
-  const lara = new Translator(credentials)
+  const lara = hasLaraCredentials
+    ? new Translator(new Credentials(LARA_ACCESS_KEY_ID, LARA_ACCESS_KEY_SECRET))
+    : null
 
-  const languageCodeMap: Record<string, string> = {
+  const laraLanguageCodeMap: Record<string, string> = {
     auto: 'auto',
     zh: 'zh-CN',
     en: 'en-US',
@@ -189,10 +197,75 @@ app.whenReady().then(() => {
     pt: 'pt-PT'
   }
 
+  const baiduLanguageCodeMap: Record<string, string> = {
+    auto: 'auto',
+    zh: 'zh',
+    en: 'en',
+    jp: 'jp',
+    kor: 'kor',
+    fra: 'fra',
+    spa: 'spa',
+    de: 'de',
+    it: 'it',
+    ru: 'ru',
+    pt: 'pt'
+  }
+
+  async function translateWithBaidu(text: string, from: string, to: string): Promise<string> {
+    if (!hasBaiduCredentials) {
+      throw new Error('Baidu Translate credentials are not configured')
+    }
+
+    const sourceLang = baiduLanguageCodeMap[from] || from
+    const targetLang = baiduLanguageCodeMap[to] || to
+    const salt = randomUUID()
+    const sign = createHash('md5').update(`${BAIDU_APP_ID}${text}${salt}${BAIDU_APP_SECRET}`).digest('hex')
+    const body = new URLSearchParams({
+      q: text,
+      from: sourceLang,
+      to: targetLang,
+      appid: BAIDU_APP_ID,
+      salt,
+      sign,
+    })
+
+    const response = await fetch('https://fanyi-api.baidu.com/api/trans/vip/translate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Baidu Translate API request failed (${response.status})`)
+    }
+
+    const data = await response.json() as { error_code?: string, error_msg?: string, trans_result?: Array<{ dst: string }> }
+    if (data.error_code) {
+      throw new Error(`${data.error_msg || 'Baidu Translate API error'} (${data.error_code})`)
+    }
+
+    if (!data.trans_result || data.trans_result.length === 0) {
+      throw new Error('Baidu Translate API returned empty translation')
+    }
+
+    return data.trans_result.map(item => item.dst).join('\n')
+  }
+
   ipcMain.handle('translate', async (_event, text: string, from: string, to: string) => {
     try {
-      let sourceLang = from === 'auto' ? 'auto' : (languageCodeMap[from] || from)
-      const targetLang = languageCodeMap[to] || to
+      if (useBaiduProvider) {
+        const translatedText = await translateWithBaidu(text, from, to)
+        return { result: translatedText }
+      }
+
+      if (!lara) {
+        return { result: '', error: 'Translation service is not configured. Please set Baidu or LARA credentials in .env.' }
+      }
+
+      let sourceLang = from === 'auto' ? 'auto' : (laraLanguageCodeMap[from] || from)
+      const targetLang = laraLanguageCodeMap[to] || to
 
       if (sourceLang === 'auto') {
         const detected = await lara.detect(text)
@@ -204,7 +277,8 @@ app.whenReady().then(() => {
       })
 
       return { result: result.translation }
-    } catch (error: any) {
+    }
+    catch (error: any) {
       return { result: '', error: `Translation failed: ${error.message}` }
     }
   })
