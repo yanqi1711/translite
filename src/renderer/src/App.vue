@@ -5,6 +5,7 @@ const sourceText = ref('')
 const translatedText = ref('')
 const sourceLang = ref('auto')
 const targetLang = ref('en')
+const provider = ref<'lara' | 'baidu'>('lara')
 const isLoading = ref(false)
 const errorMessage = ref('')
 const showResult = ref(false)
@@ -78,7 +79,7 @@ async function translateText() {
   await resizeWindowToContent()
 
   try {
-    const response = await window.api.translate(textToTranslate, sourceLang.value, targetLang.value)
+    const response = await window.api.translate(textToTranslate, sourceLang.value, targetLang.value, provider.value)
     if (response.error) {
       errorMessage.value = response.error
       showResult.value = false
@@ -195,6 +196,14 @@ onMounted(() => {
       <h1>Lara Translate</h1>
     </header>
 
+    <div class="provider-selector">
+      <label for="provider">翻译引擎</label>
+      <select id="provider" v-model="provider" class="provider-select">
+        <option value="lara">Lara</option>
+        <option value="baidu">Baidu</option>
+      </select>
+    </div>
+
     <div class="language-selector">
       <select v-model="sourceLang" class="lang-select">
         <option v-for="lang in languageOptions" :key="lang.value" :value="lang.value">
@@ -253,3 +262,23 @@ onMounted(() => {
     </footer>
   </div>
 </template>
+
+<style scoped>
+.provider-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.provider-select {
+  min-width: 140px;
+  padding: 6px 8px;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.9);
+  color: #f3f4f6;
+}
+</style>

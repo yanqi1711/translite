@@ -1,6 +1,6 @@
 # LARA翻译 - Electron桌面应用
 
-基于 Electron + Vue + TypeScript 开发的LARA翻译桌面应用。
+基于 Electron + Vue + TypeScript 开发的桌面翻译应用，支持 Lara 与百度翻译 API。
 
 ## 功能特性
 
@@ -9,7 +9,7 @@
 - 实时翻译
 - 一键复制翻译结果
 - 简洁美观的界面设计
-- 使用LARA AI翻译引擎，提供更准确的翻译结果
+- 支持 Lara 与百度翻译引擎，可在界面中切换
 
 ## 安装依赖
 
@@ -29,6 +29,13 @@ LARA_ACCESS_KEY_SECRET=你的LARA_ACCESS_KEY_SECRET
 ```
 
 参考 `.env.example` 文件。
+
+如果要使用百度翻译，请额外配置：
+
+```env
+BAIDU_TRANSLATE_APP_ID=你的百度翻译APP_ID
+BAIDU_TRANSLATE_SECRET_KEY=你的百度翻译密钥
+```
 
 ## 开发
 

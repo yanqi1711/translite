@@ -4,7 +4,7 @@ import process from 'node:process'
 
 // Custom APIs for renderer
 const api = {
-  translate: (text: string, from: string, to: string) => ipcRenderer.invoke('translate', text, from, to),
+  translate: (text: string, from: string, to: string, provider: 'lara' | 'baidu') => ipcRenderer.invoke('translate', text, from, to, provider),
   resizeWindow: (height?: number) => ipcRenderer.send('resize-window', height),
   onShowApp: (callback: () => void) => {
     ipcRenderer.on('focus-input', callback)
